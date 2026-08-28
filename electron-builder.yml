@@ -1,0 +1,42 @@
+appId: com.opencode.session-manager
+productName: OpenCodeSessionManager
+copyright: Copyright © 2026
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+
+extraResources:
+  - from: src/helper/db-helper.mjs
+    to: db-helper.mjs
+  - from: resources/node.exe
+    to: node.exe
+
+asar: true
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: OpenCode 会话管理器
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+portable:
+  artifactName: "${productName}-Portable-${version}.${ext}"
+
+electronDownload:
+  mirror: https://npmmirror.com/mirrors/electron/
