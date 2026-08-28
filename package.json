@@ -1,6 +1,6 @@
 {
   "name": "opencode-session-manager",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "OpenCode 项目会话管理器（Windows）",
   "main": "./out/main/index.js",
   "private": true,
