@@ -33,28 +33,18 @@ export default function SettingsModal({
         </div>
 
         <div className="field">
-          <label>终端</label>
-          <div className="radio-row">
-            <label className="radio">
-              <input
-                type="radio"
-                name="terminal"
-                checked={settings.terminal === 'pwsh'}
-                onChange={() => onChange({ terminal: 'pwsh' })}
-              />
-              PowerShell 窗口（推荐）
-            </label>
-            <label className="radio">
-              <input
-                type="radio"
-                name="terminal"
-                checked={settings.terminal === 'wt'}
-                onChange={() => onChange({ terminal: 'wt' })}
-              />
-              Windows Terminal
-            </label>
-          </div>
-          <p className="muted">选择一个项目或会话后，将在所选终端中启动 opencode。</p>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={settings.runAsAdmin}
+              onChange={(e) => onChange({ runAsAdmin: e.target.checked })}
+            />
+            以管理员身份启动终端
+          </label>
+          <p className="muted">
+            勾选后，「打开项目 / PowerShell / 续接会话」将以管理员权限运行，会弹出 UAC 确认。
+            有 Windows Terminal 时用提升的 Windows Terminal 打开（显示正常），否则回退控制台窗口。
+          </p>
         </div>
 
         <div className="field">

@@ -557,6 +557,14 @@ code {
   gap: 18px;
 }
 
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
 .radio {
   display: flex;
   align-items: center;

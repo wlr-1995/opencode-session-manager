@@ -116,21 +116,24 @@ export function registerIpc(bridge: DbBridge, store: Store): void {
   ipcMain.handle('launch:project', (_e, dir: string): LaunchResult => {
     const key = normalizeDir(dir)
     store.addRecent(key, key.split('/').filter(Boolean).pop() ?? key)
-    return launchInTerminal({ dir: key, opencodeArgs: '' }, store.getSettings().terminal, store.getSettings().opencodePath)
+    const s = store.getSettings()
+    return launchInTerminal({ dir: key, opencodeArgs: '' }, s.opencodePath, s.runAsAdmin)
   })
 
   ipcMain.handle('launch:shell', (_e, dir: string): LaunchResult => {
     const key = normalizeDir(dir)
-    return launchInTerminal({ dir: key, opencodeArgs: null }, store.getSettings().terminal, store.getSettings().opencodePath)
+    const s = store.getSettings()
+    return launchInTerminal({ dir: key, opencodeArgs: null }, s.opencodePath, s.runAsAdmin)
   })
 
   ipcMain.handle('launch:session', (_e, dir: string, sessionId: string): LaunchResult => {
     const key = normalizeDir(dir)
     store.addRecent(key, key.split('/').filter(Boolean).pop() ?? key)
+    const s = store.getSettings()
     return launchInTerminal(
       { dir: key, opencodeArgs: `-s ${sessionId}` },
-      store.getSettings().terminal,
-      store.getSettings().opencodePath
+      s.opencodePath,
+      s.runAsAdmin
     )
   })
 

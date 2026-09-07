@@ -13,8 +13,8 @@ export interface StoreData {
 
 const DEFAULT_SETTINGS: AppSettings = {
   dataDir: null,
-  terminal: 'pwsh',
-  opencodePath: null
+  opencodePath: null,
+  runAsAdmin: false
 }
 
 export function normalizeDir(dir: string): string {

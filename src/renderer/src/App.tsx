@@ -25,7 +25,7 @@ export default function App() {
   const [sessions, setSessions] = useState<SessionInfo[]>([])
   const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
   const [favorites, setFavorites] = useState<Favorite[]>([])
-  const [settings, setSettings] = useState<AppSettings>({ dataDir: null, terminal: 'pwsh', opencodePath: null })
+  const [settings, setSettings] = useState<AppSettings>({ dataDir: null, opencodePath: null, runAsAdmin: false })
   const [opencodeCheck, setOpencodeCheck] = useState<OpencodeCheck | null>(null)
   const [envCheck, setEnvCheck] = useState<EnvCheck | null>(null)
   const [view, setView] = useState<ViewKind>('projects')

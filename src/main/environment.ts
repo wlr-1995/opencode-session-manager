@@ -44,6 +44,20 @@ export function checkPwsh(): { found: boolean; path: string | null } {
   }
 }
 
+export function checkWt(): { found: boolean; path: string | null } {
+  try {
+    const out = execFileSync('where.exe', ['wt'], {
+      encoding: 'utf8',
+      timeout: 5000,
+      windowsHide: true
+    })
+    const line = out.split(/\r?\n/).find(Boolean)
+    return line ? { found: true, path: line } : { found: false, path: null }
+  } catch {
+    return { found: false, path: null }
+  }
+}
+
 /** 启动终端用：优先 PowerShell 7（pwsh），否则回退系统自带 Windows PowerShell（powershell.exe） */
 export function resolveShellName(): string {
   return checkPwsh().found ? 'pwsh' : 'powershell.exe'

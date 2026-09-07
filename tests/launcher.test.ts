@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAdminArgs,
+  buildAdminWtArgs,
   buildPsCommand,
   buildStartArgs,
+  chcp65001,
   encodeCommand,
   psEscape,
   START_WINDOW_TITLE
 } from '../src/main/launcher'
+
+function decodeEncoded(args: string[]): string {
+  const enc = args[args.indexOf('-EncodedCommand') + 1]
+  return Buffer.from(enc, 'base64').toString('utf16le')
+}
 
 describe('psEscape', () => {
   it('转义单引号', () => {
@@ -70,5 +78,27 @@ describe('buildStartArgs', () => {
   it('未安装 PowerShell 7 时可指定 powershell.exe 回退', () => {
     const args = buildStartArgs('UwBlAHQ', 'powershell.exe')
     expect(args.slice(3)).toEqual(['powershell.exe', '-NoExit', '-EncodedCommand', 'UwBlAHQ'])
+  })
+})
+
+describe('buildAdminArgs', () => {
+  it('生成 Start-Process -Verb RunAs 的外层脚本（管理员启动）', () => {
+    const args = buildAdminArgs('QQ==', 'pwsh')
+    expect(args[0]).toBe('-NoProfile')
+    const inner = decodeEncoded(args)
+    expect(inner).toContain("Start-Process -FilePath 'pwsh' -Verb RunAs")
+    expect(inner).toContain("'-NoExit','-EncodedCommand','QQ=='")
+  })
+
+  it('管理员启动 Windows Terminal 走 wt.exe', () => {
+    const args = buildAdminWtArgs('QQ==', 'powershell.exe')
+    const inner = decodeEncoded(args)
+    expect(inner).toContain("Start-Process -FilePath 'wt.exe' -Verb RunAs")
+    expect(inner).toContain("'powershell.exe'")
+  })
+
+  it('无 Windows Terminal 回退 conhost 时先 chcp 65001 避免乱码', () => {
+    const fixed = chcp65001(`Set-Location 'D:/x'; opencode`)
+    expect(fixed).toBe(`chcp 65001 > $null; Set-Location 'D:/x'; opencode`)
   })
 })

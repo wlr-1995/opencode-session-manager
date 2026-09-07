@@ -1,9 +1,9 @@
 import { spawn, execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import type { LaunchResult, TerminalKind } from '@shared/types'
+import type { LaunchResult } from '@shared/types'
 import { app } from 'electron'
-import { resolveShellName } from './environment'
+import { checkWt, resolveShellName } from './environment'
 function logDebug(entry: string): void {
   try {
     const file = join(app.getPath('userData'), 'launch-debug.log')
@@ -59,6 +59,89 @@ export function buildStartArgs(encoded: string, shell = 'pwsh'): string[] {
 }
 
 /**
+ * 以管理员身份启动终端：用 Start-Process -Verb RunAs 触发 UAC，
+ * 在提升后的窗口中运行 shell + -EncodedCommand。
+ * 返回「外层脚本」的 -EncodedCommand 参数列表（外层由非提升 pwsh 执行）。
+ */
+export function buildAdminArgs(encoded: string, shell = 'pwsh'): string[] {
+  const inner = `Start-Process -FilePath '${psEscape(shell)}' -Verb RunAs -ArgumentList '-NoExit','-EncodedCommand','${encoded}'`
+  return ['-NoProfile', '-EncodedCommand', encodeCommand(inner)]
+}
+
+/** 以管理员身份打开 Windows Terminal 并新建标签运行 shell */
+export function buildAdminWtArgs(encoded: string, shell = 'pwsh'): string[] {
+  const inner = `Start-Process -FilePath 'wt.exe' -Verb RunAs -ArgumentList '-w','0','nt','${shell}','-NoExit','-EncodedCommand','${encoded}'`
+  return ['-NoProfile', '-EncodedCommand', encodeCommand(inner)]
+}
+
+export function launchInTerminal(
+  spec: LaunchSpec,
+  opencodePath: string | null,
+  runAsAdmin = false
+): LaunchResult {
+  if (!spec.dir || !existsSync(spec.dir)) {
+    return { ok: false, error: `目录不存在：${spec.dir}` }
+  }
+  const resolvedOc = opencodePath ?? resolveOpencodeExecutable()
+  const command = buildPsCommand(spec, resolvedOc)
+  const encoded = encodeCommand(command)
+  const shell = resolveShellName()
+  const wtFound = checkWt().found
+  logDebug(`spec=${JSON.stringify(spec)} shell=${shell} opencodePath=${opencodePath} resolved=${resolvedOc} runAsAdmin=${runAsAdmin} wt=${wtFound}`)
+  logDebug(`command=${command}`)
+  logDebug(`encoded=${encoded}`)
+
+  try {
+    if (runAsAdmin) {
+      // 外层 pwsh（隐藏）执行 Start-Process -Verb RunAs，弹出 UAC 后打开提升窗口
+      let outerArgs: string[]
+      if (wtFound) {
+        // 提升的 Windows Terminal：字体/UTF-8 渲染正常
+        outerArgs = buildAdminWtArgs(encoded, shell)
+      } else {
+        // 回退提升的 conhost：先 chcp 65001 解决乱码（字体清晰度受 conhost 限制）
+        const fixed = encodeCommand(`${chcp65001(command)}`)
+        outerArgs = buildAdminArgs(fixed, shell)
+      }
+      logDebug(`runas outer args=${JSON.stringify(outerArgs)}`)
+      const child = spawn(shell, outerArgs, { windowsHide: true, stdio: 'ignore' })
+      child.on('error', (err) => logDebug(`runas spawn error: ${err.message}`))
+      child.unref()
+      return { ok: true }
+    }
+    if (wtFound) {
+      // Windows Terminal 新标签（字体/UTF-8 渲染正常）
+      const child = spawn(
+        'wt.exe',
+        ['-w', '0', 'nt', shell, '-NoExit', '-EncodedCommand', encoded],
+        { detached: true, stdio: 'ignore' }
+      )
+      child.on('error', (err) => logDebug(`wt spawn error: ${err.message}`))
+      child.unref()
+      return { ok: true }
+    }
+    // 无 Windows Terminal：用 cmd /c start 开控制台窗口（真实键盘 stdin，-NoExit 不闪退）
+    const args = buildStartArgs(encoded, shell)
+    logDebug(`spawn cmd.exe args=${JSON.stringify(args)} cwd=${spec.dir} shell=${shell}`)
+    const child = spawn('cmd.exe', args, {
+      cwd: spec.dir,
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.on('error', (err) => logDebug(`cmd spawn error: ${err.message}`))
+    child.unref()
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** 无 Windows Terminal 时，让提升的 conhost 先切到 UTF-8 代码页，缓解中文乱码 */
+export function chcp65001(command: string): string {
+  return `chcp 65001 > $null; ${command}`
+}
+
+/**
  * 解析 opencode CLI（TUI）的绝对路径，避免依赖子进程窗口里的 PATH。
  * 顺序：npm 全局目录 → where 结果 → npm shim 推导。
  */
@@ -91,47 +174,4 @@ export function resolveOpencodeExecutable(): string | null {
     /* where 不可用 */
   }
   return null
-}
-
-export function launchInTerminal(
-  spec: LaunchSpec,
-  terminal: TerminalKind,
-  opencodePath: string | null
-): LaunchResult {
-  if (!spec.dir || !existsSync(spec.dir)) {
-    return { ok: false, error: `目录不存在：${spec.dir}` }
-  }
-  const resolvedOc = opencodePath ?? resolveOpencodeExecutable()
-  const command = buildPsCommand(spec, resolvedOc)
-  const encoded = encodeCommand(command)
-  logDebug(`spec=${JSON.stringify(spec)} terminal=${terminal} opencodePath=${opencodePath} resolved=${resolvedOc}`)
-  logDebug(`command=${command}`)
-  logDebug(`encoded=${encoded}`)
-
-  try {
-    const shell = resolveShellName()
-    if (terminal === 'wt') {
-      const child = spawn(
-        'wt.exe',
-        ['-w', '0', 'nt', shell, '-NoExit', '-EncodedCommand', encoded],
-        { detached: true, stdio: 'ignore' }
-      )
-      child.on('error', (err) => logDebug(`wt spawn error: ${err.message}`))
-      child.unref()
-      return { ok: true }
-    }
-    // 用 cmd /c start 开新控制台窗口：获得真实键盘 stdin（-NoExit 下窗口不会闪退）
-    const args = buildStartArgs(encoded, shell)
-    logDebug(`spawn cmd.exe args=${JSON.stringify(args)} cwd=${spec.dir} shell=${shell}`)
-    const child = spawn('cmd.exe', args, {
-      cwd: spec.dir,
-      detached: true,
-      stdio: 'ignore'
-    })
-    child.on('error', (err) => logDebug(`cmd spawn error: ${err.message}`))
-    child.unref()
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) }
-  }
 }

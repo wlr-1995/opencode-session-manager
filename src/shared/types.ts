@@ -30,12 +30,11 @@ export interface DbStatus {
   error?: string
 }
 
-export type TerminalKind = 'pwsh' | 'wt'
-
 export interface AppSettings {
   dataDir: string | null
-  terminal: TerminalKind
   opencodePath: string | null
+  /** 以管理员身份启动终端窗口 */
+  runAsAdmin: boolean
 }
 
 export interface Favorite {
