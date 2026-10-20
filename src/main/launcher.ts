@@ -1,9 +1,10 @@
 import { spawn, execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { delimiter, dirname, join } from 'node:path'
 import type { LaunchResult } from '@shared/types'
 import { app } from 'electron'
-import { checkWt, resolveShellName } from './environment'
+import { checkTerminal, checkWt, findExecutable, resolveShellName } from './environment'
 function logDebug(entry: string): void {
   try {
     const file = join(app.getPath('userData'), 'launch-debug.log')
@@ -74,11 +75,122 @@ export function buildAdminWtArgs(encoded: string, shell = 'pwsh'): string[] {
   return ['-NoProfile', '-EncodedCommand', encodeCommand(inner)]
 }
 
+/** POSIX shell 单引号转义 */
+export function shQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * 生成 Linux/macOS 下传给 shell 的命令：先 cd 到目标目录，再运行 opencode。
+ * opencode 退出后 exec 一个交互式登录 shell，窗口不会一闪而过。
+ */
+export function buildShCommand(
+  spec: LaunchSpec,
+  opencodePath: string | null,
+  shell = '/bin/bash'
+): string {
+  const cd = `cd -- ${shQuote(spec.dir)}`
+  const keep = `exec ${shQuote(shell)} -l`
+  if (spec.opencodeArgs === null) return `${cd} && ${keep}`
+  const args = (spec.opencodeArgs ?? '').trim()
+  const opencode = opencodePath ? shQuote(opencodePath) : 'opencode'
+  return `${cd} && { ${opencode}${args ? ` ${args}` : ''}; ${keep}; }`
+}
+
+/**
+ * 不同终端模拟器的参数约定不同：
+ * - mate-terminal 的 -e 只接受一个「命令字符串」，需自行做 shell 分词
+ * - gnome-terminal / tilix 用 `--` 分隔
+ * - konsole / xfce4-terminal 用 -e / -x
+ */
+export function buildTerminalArgs(name: string, dir: string, cmdArgs: string[]): string[] {
+  const n = name.toLowerCase()
+  if (n.includes('mate-terminal')) {
+    return [
+      `--working-directory=${dir}`,
+      '--title=OpenCode 会话',
+      '-e',
+      cmdArgs.map(shQuote).join(' ')
+    ]
+  }
+  if (n.includes('gnome-terminal') || n.includes('tilix')) {
+    return [`--working-directory=${dir}`, '--title=OpenCode 会话', '--', ...cmdArgs]
+  }
+  if (n.includes('konsole')) {
+    return ['--workdir', dir, '-e', ...cmdArgs]
+  }
+  if (n.includes('xfce4-terminal')) {
+    return [`--working-directory=${dir}`, '-x', ...cmdArgs]
+  }
+  if (n.includes('kitty')) {
+    return ['--directory', dir, ...cmdArgs]
+  }
+  if (n.includes('alacritty')) {
+    return ['--working-directory', dir, '-e', ...cmdArgs]
+  }
+  if (n.includes('wezterm')) {
+    return ['start', '--cwd', dir, '--', ...cmdArgs]
+  }
+  // xterm / x-terminal-emulator / 未知终端
+  return ['-e', ...cmdArgs]
+}
+
+/** 终端窗口继承的 PATH，补充 GUI 启动时容易丢失的用户目录 */
+function launchEnv(): NodeJS.ProcessEnv {
+  const extra = [join(homedir(), '.opencode', 'bin'), join(homedir(), '.local', 'bin')]
+  const path = [process.env.PATH ?? '', ...extra].filter(Boolean).join(delimiter)
+  return { ...process.env, PATH: path }
+}
+
+function launchInUnixTerminal(
+  spec: LaunchSpec,
+  opencodePath: string | null,
+  runAsAdmin: boolean
+): LaunchResult {
+  if (!spec.dir || !existsSync(spec.dir)) {
+    return { ok: false, error: `目录不存在：${spec.dir}` }
+  }
+  const terminal = checkTerminal()
+  if (!terminal.found || !terminal.path) {
+    return {
+      ok: false,
+      error: '未找到可用的终端模拟器，请安装 gnome-terminal、konsole、xfce4-terminal、mate-terminal 或 xterm 之一'
+    }
+  }
+  const resolvedOc = opencodePath ?? resolveOpencodeExecutable()
+  const shell = resolveShellName()
+  const cmdArgs =
+    spec.opencodeArgs === null
+      ? [shell, '-l']
+      : [shell, '-l', '-c', buildShCommand(spec, resolvedOc, shell)]
+  const args = buildTerminalArgs(terminal.name ?? 'xterm', spec.dir, cmdArgs)
+  logDebug(
+    `terminal=${terminal.path} shell=${shell} opencodePath=${opencodePath} resolved=${resolvedOc} runAsAdmin=${runAsAdmin}`
+  )
+  logDebug(`args=${JSON.stringify(args)}`)
+
+  try {
+    const child = spawn(terminal.path, args, {
+      cwd: spec.dir,
+      detached: true,
+      stdio: 'ignore',
+      env: launchEnv()
+    })
+    child.on('error', (err) => logDebug(`terminal spawn error: ${err.message}`))
+    child.unref()
+    if (runAsAdmin) logDebug('linux: runAsAdmin 不受支持，已按普通权限启动')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 export function launchInTerminal(
   spec: LaunchSpec,
   opencodePath: string | null,
   runAsAdmin = false
 ): LaunchResult {
+  if (process.platform !== 'win32') return launchInUnixTerminal(spec, opencodePath, runAsAdmin)
   if (!spec.dir || !existsSync(spec.dir)) {
     return { ok: false, error: `目录不存在：${spec.dir}` }
   }
@@ -146,6 +258,7 @@ export function chcp65001(command: string): string {
  * 顺序：npm 全局目录 → where 结果 → npm shim 推导。
  */
 export function resolveOpencodeExecutable(): string | null {
+  if (process.platform !== 'win32') return findExecutable('opencode')
   try {
     const prefix = execFileSync('npm', ['prefix', '-g'], { encoding: 'utf8' }).trim()
     if (prefix) {

@@ -5,6 +5,7 @@ interface Props {
   settings: AppSettings
   opencodeCheck: OpencodeCheck | null
   hiddenProjects: string[]
+  platform: string
   onChange: (patch: Partial<AppSettings>) => void
   onPickDataDir: () => void
   onCheckOpencode: () => void
@@ -16,12 +17,15 @@ export default function SettingsModal({
   settings,
   opencodeCheck,
   hiddenProjects,
+  platform,
   onChange,
   onPickDataDir,
   onCheckOpencode,
   onUnhide,
   onClose
 }: Props) {
+  const isWindows = platform === 'win32'
+  const terminalLabel = isWindows ? 'PowerShell' : '终端'
   return (
     <div className="modal-mask" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -32,20 +36,22 @@ export default function SettingsModal({
           </button>
         </div>
 
-        <div className="field">
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={settings.runAsAdmin}
-              onChange={(e) => onChange({ runAsAdmin: e.target.checked })}
-            />
-            以管理员身份启动终端
-          </label>
-          <p className="muted">
-            勾选后，「打开项目 / PowerShell / 续接会话」将以管理员权限运行，会弹出 UAC 确认。
-            有 Windows Terminal 时用提升的 Windows Terminal 打开（显示正常），否则回退控制台窗口。
-          </p>
-        </div>
+        {isWindows && (
+          <div className="field">
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={settings.runAsAdmin}
+                onChange={(e) => onChange({ runAsAdmin: e.target.checked })}
+              />
+              以管理员身份启动终端
+            </label>
+            <p className="muted">
+              勾选后，「打开项目 / PowerShell / 续接会话」将以管理员权限运行，会弹出 UAC 确认。
+              有 Windows Terminal 时用提升的 Windows Terminal 打开（显示正常），否则回退控制台窗口。
+            </p>
+          </div>
+        )}
 
         <div className="field">
           <label>opencode 数据目录</label>
@@ -78,7 +84,7 @@ export default function SettingsModal({
             </button>
           </div>
           <p className="muted">
-            默认使用 PATH 中的 <code>opencode</code>，在新 PowerShell 窗口中可直接运行。
+            默认使用 PATH 中的 <code>opencode</code>，在新{terminalLabel}窗口中可直接运行。
           </p>
         </div>
 

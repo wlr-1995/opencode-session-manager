@@ -8,16 +8,18 @@ directories:
 
 files:
   - out/**/*
+  - build/icon.png
 
 extraResources:
   - from: src/helper/db-helper.mjs
     to: db-helper.mjs
-  - from: resources/node.exe
-    to: node.exe
 
 asar: true
 
 win:
+  extraResources:
+    - from: resources/node.exe
+      to: node.exe
   target:
     - target: nsis
       arch:
@@ -25,6 +27,15 @@ win:
     - target: portable
       arch:
         - x64
+
+linux:
+  target:
+    - target: AppImage
+  category: Development
+  icon: build/icon.png
+  executableName: opencode-session-manager
+  syncDesktopName: true
+  artifactName: "${productName}-${version}-${arch}.${ext}"
 
 nsis:
   oneClick: false

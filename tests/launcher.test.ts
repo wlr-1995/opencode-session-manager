@@ -3,10 +3,13 @@ import {
   buildAdminArgs,
   buildAdminWtArgs,
   buildPsCommand,
+  buildShCommand,
   buildStartArgs,
+  buildTerminalArgs,
   chcp65001,
   encodeCommand,
   psEscape,
+  shQuote,
   START_WINDOW_TITLE
 } from '../src/main/launcher'
 
@@ -100,5 +103,71 @@ describe('buildAdminArgs', () => {
   it('无 Windows Terminal 回退 conhost 时先 chcp 65001 避免乱码', () => {
     const fixed = chcp65001(`Set-Location 'D:/x'; opencode`)
     expect(fixed).toBe(`chcp 65001 > $null; Set-Location 'D:/x'; opencode`)
+  })
+})
+
+describe('shQuote', () => {
+  it('转义单引号', () => {
+    expect(shQuote(`a'b`)).toBe(`'a'\\''b'`)
+  })
+  it('含空格的路径整体加引号', () => {
+    expect(shQuote('/home/me/My Projects')).toBe(`'/home/me/My Projects'`)
+  })
+})
+
+describe('buildShCommand', () => {
+  it('先 cd 再运行 opencode', () => {
+    const cmd = buildShCommand({ dir: '/home/me/My Projects', opencodeArgs: '' }, null, '/bin/bash')
+    expect(cmd).toContain(`cd -- '/home/me/My Projects'`)
+    expect(cmd).toContain('&& { opencode;')
+    expect(cmd).toContain(`exec '/bin/bash' -l`)
+  })
+
+  it('续接会话时带 -s 参数', () => {
+    const cmd = buildShCommand({ dir: '/tmp/a', opencodeArgs: '-s ses_abc' }, '/opt/oc/opencode', '/bin/zsh')
+    expect(cmd).toContain(`'/opt/oc/opencode' -s ses_abc`)
+    expect(cmd).toContain(`exec '/bin/zsh' -l`)
+  })
+
+  it('opencodeArgs 为 null 时只打开目录', () => {
+    const cmd = buildShCommand({ dir: '/tmp/a', opencodeArgs: null }, null)
+    expect(cmd).toBe(`cd -- '/tmp/a' && exec '/bin/bash' -l`)
+  })
+})
+
+describe('buildTerminalArgs', () => {
+  const cmd = ['/bin/bash', '-l']
+
+  it('mate-terminal 使用 --working-directory 与单一 -e 命令串', () => {
+    const args = buildTerminalArgs('mate-terminal', '/tmp/a b', cmd)
+    expect(args).toContain('--working-directory=/tmp/a b')
+    expect(args).toContain('-e')
+    // -e 只接受一个参数，命令需整体引用
+    expect(args[args.length - 1]).toBe(`'/bin/bash' '-l'`)
+  })
+
+  it('gnome-terminal / tilix 使用 -- 分隔命令', () => {
+    expect(buildTerminalArgs('gnome-terminal', '/tmp/a', cmd)).toEqual([
+      '--working-directory=/tmp/a',
+      '--title=OpenCode 会话',
+      '--',
+      ...cmd
+    ])
+    expect(buildTerminalArgs('tilix', '/tmp/a', cmd).slice(-3)).toEqual(['--', ...cmd])
+  })
+
+  it('konsole / xfce4-terminal / alacritty 使用各自的目录参数', () => {
+    expect(buildTerminalArgs('konsole', '/tmp/a', cmd).slice(0, 3)).toEqual(['--workdir', '/tmp/a', '-e'])
+    expect(buildTerminalArgs('xfce4-terminal', '/tmp/a', cmd).slice(0, 2)).toEqual(['--working-directory=/tmp/a', '-x'])
+    expect(buildTerminalArgs('alacritty', '/tmp/a', cmd).slice(0, 3)).toEqual([
+      '--working-directory',
+      '/tmp/a',
+      '-e'
+    ])
+  })
+
+  it('xterm / x-terminal-emulator 回退 -e', () => {
+    expect(buildTerminalArgs('xterm', '/tmp/a', cmd)).toEqual(['-e', ...cmd])
+    expect(buildTerminalArgs('x-terminal-emulator', '/tmp/a', cmd)).toEqual(['-e', ...cmd])
   })
 })

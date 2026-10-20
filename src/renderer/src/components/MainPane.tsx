@@ -6,6 +6,7 @@ interface Props {
   sessions: SessionInfo[]
   recentSessions: RecentSession[]
   favoriteKeys: Set<string>
+  platform: string
   onLaunchProject: (dir: string) => void
   onLaunchShell: (dir: string) => void
   onLaunchSession: (dir: string, sessionId: string) => void
@@ -18,12 +19,16 @@ export default function MainPane({
   sessions,
   recentSessions,
   favoriteKeys,
+  platform,
   onLaunchProject,
   onLaunchShell,
   onLaunchSession,
   onOpenExplorer,
   onToggleFavorite
 }: Props) {
+  const isWindows = platform === 'win32'
+  const terminalLabel = isWindows ? 'PowerShell' : '终端'
+  const fileManagerLabel = isWindows ? '资源管理器' : '文件管理器'
   if (!project) {
     return (
       <main className="main">
@@ -73,12 +78,16 @@ export default function MainPane({
           <button
             className="btn"
             onClick={() => onLaunchShell(project.worktree)}
-            title="在项目目录打开 PowerShell（不启动 opencode）"
+            title={`在项目目录打开${terminalLabel}（不启动 opencode）`}
           >
-            ⌨ PowerShell
+            ⌨ {terminalLabel}
           </button>
-          <button className="btn" onClick={() => onOpenExplorer(project.worktree)} title="在资源管理器中打开">
-            📁 资源管理器
+          <button
+            className="btn"
+            onClick={() => onOpenExplorer(project.worktree)}
+            title={`在${fileManagerLabel}中打开`}
+          >
+            📁 {fileManagerLabel}
           </button>
         </div>
       </div>

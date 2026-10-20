@@ -1,14 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { createInterface } from 'node:readline'
-import { join } from 'node:path'
+import { findNodeBinary, nodeSqliteArgs } from './environment'
 import { helperPath } from './paths'
 
-/** 优先使用打包内置的 node.exe（无需系统 Node），否则回退系统 node */
+/** 优先使用打包内置的 Node，否则在 PATH 与常见安装目录中查找 */
 export function nodeBinary(): string {
-  const bundled = join(process.resourcesPath, 'node.exe')
-  if (existsSync(bundled)) return bundled
-  return 'node'
+  return findNodeBinary() ?? 'node'
 }
 
 interface Pending {
@@ -32,7 +29,7 @@ export class DbBridge {
 
   private ensureChild(): void {
     if (this.child && this.child.exitCode === null && this.child.signalCode === null) return
-    const child = spawn(nodeBinary(), [helperPath()], {
+    const child = spawn(nodeBinary(), [...nodeSqliteArgs(), helperPath()], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -67,7 +64,7 @@ export class DbBridge {
       const code = (err as NodeJS.ErrnoException).code
       const message =
         code === 'ENOENT'
-          ? '无法启动 Node.js（应用内置 node.exe 与系统 node 均不可用），请到设置检查环境。'
+          ? '无法启动 Node.js（未找到可用的 Node.js，请安装 Node.js ≥ 22.5，或设置环境变量 OPENCODE_MANAGER_NODE）'
           : `数据库助手启动失败：${err.message}`
       this.rejectAll(new Error(message))
       this.reset()

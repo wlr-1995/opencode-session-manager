@@ -14,7 +14,7 @@ import type {
   SessionInfo
 } from '@shared/types'
 import { DbBridge } from './db-bridge'
-import { checkEnvironment } from './environment'
+import { checkEnvironment, findExecutable } from './environment'
 import { launchInTerminal } from './launcher'
 import { dbPathFor, defaultDataDir } from './paths'
 import { normalizeDir, Store } from './store'
@@ -170,6 +170,10 @@ export function registerIpc(bridge: DbBridge, store: Store): void {
 }
 
 function runWhere(): { ok: boolean; line?: string } {
+  if (process.platform !== 'win32') {
+    const path = findExecutable('opencode')
+    return path ? { ok: true, line: path } : { ok: false }
+  }
   try {
     const out = execFileSync('where.exe', ['opencode'], { encoding: 'utf8', windowsHide: true })
     const line = out.split(/\r?\n/).find(Boolean)

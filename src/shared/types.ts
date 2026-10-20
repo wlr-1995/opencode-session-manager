@@ -67,9 +67,17 @@ export interface EnvNodeInfo {
   sqlite: boolean
 }
 
+export interface EnvTerminalInfo {
+  found: boolean
+  path: string | null
+}
+
 export interface EnvCheck {
+  /** 当前运行平台（win32 / linux / darwin） */
+  platform: string
   node: EnvNodeInfo
   pwsh: { found: boolean; path: string | null }
+  terminal: EnvTerminalInfo
   dbPath: string
   dbExists: boolean
 }

@@ -8,7 +8,7 @@ import { Store } from './store'
 let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
-  const iconPath = join(__dirname, '../../build/icon.ico')
+  const iconPath = join(__dirname, `../../build/icon.${process.platform === 'win32' ? 'ico' : 'png'}`)
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 760,

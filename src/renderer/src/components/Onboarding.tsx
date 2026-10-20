@@ -19,7 +19,8 @@ function StatusRow({ label, ok, detail }: { label: string; ok: boolean; detail: 
 }
 
 export default function Onboarding({ dbError, env, onRetry, onPickDataDir, onQuit }: Props) {
-  // 读库优先用应用内置 node.exe；系统 Node 太旧时提示（非致命，通常可用内置版）
+  const isWindows = (env?.platform ?? 'win32') === 'win32'
+  // 读库需要支持 node:sqlite 的 Node（≥22.5；22.x 需 --experimental-sqlite，应用会自动加）
   const nodeNeedsUpgrade = env?.node.found && !env.node.sqlite
   const nodeOk = nodeNeedsUpgrade ? false : !!env?.node.found
   return (
@@ -39,17 +40,33 @@ export default function Onboarding({ dbError, env, onRetry, onPickDataDir, onQui
                 env.node.found
                   ? env.node.sqlite
                     ? `v${env.node.version}`
-                    : `v${env.node.version}（偏旧，需 ≥22.5；应用已内置新版 node.exe）`
-                  : '系统未安装（应用内置 node.exe 可用）'
+                    : `v${env.node.version}（偏旧，需 ≥22.5${isWindows ? '；应用已内置新版 node.exe' : ''}）`
+                  : isWindows
+                    ? '系统未安装（应用内置 node.exe 可用）'
+                    : '系统未安装（请安装 Node.js ≥22.5，并确保在 PATH 中）'
               }
             />
-            <StatusRow
-              label="PowerShell（启动终端）"
-              ok={env.pwsh.found}
-              detail={
-                env.pwsh.found ? (env.pwsh.path ?? '') : '未安装 PowerShell 7，将回退到系统自带 Windows PowerShell'
-              }
-            />
+            {isWindows ? (
+              <StatusRow
+                label="PowerShell（启动终端）"
+                ok={env.pwsh.found}
+                detail={
+                  env.pwsh.found
+                    ? (env.pwsh.path ?? '')
+                    : '未安装 PowerShell 7，将回退到系统自带 Windows PowerShell'
+                }
+              />
+            ) : (
+              <StatusRow
+                label="终端模拟器（启动终端）"
+                ok={env.terminal.found}
+                detail={
+                  env.terminal.found
+                    ? (env.terminal.path ?? '')
+                    : '未找到终端，请安装 gnome-terminal / konsole / xfce4-terminal / mate-terminal / xterm'
+                }
+              />
+            )}
             <StatusRow
               label="opencode 数据库"
               ok={env.dbExists}

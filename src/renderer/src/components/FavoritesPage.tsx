@@ -7,6 +7,7 @@ interface Props {
   projects: ProjectInfo[]
   favoriteKeys: Set<string>
   recentSessions: RecentSession[]
+  platform: string
   onLaunchProject: (dir: string) => void
   onLaunchShell: (dir: string) => void
   onLaunchSession: (dir: string, sessionId: string) => void
@@ -20,6 +21,7 @@ export default function FavoritesPage({
   projects,
   favoriteKeys,
   recentSessions,
+  platform,
   onLaunchProject,
   onLaunchShell,
   onLaunchSession,
@@ -130,6 +132,7 @@ export default function FavoritesPage({
         sessions={sessions}
         recentSessions={recentSessions}
         favoriteKeys={favoriteKeys}
+        platform={platform}
         onLaunchProject={onLaunchProject}
         onLaunchShell={onLaunchShell}
         onLaunchSession={onLaunchSession}

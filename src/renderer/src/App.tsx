@@ -126,6 +126,10 @@ export default function App() {
 
   const favoriteKeys = useMemo(() => new Set(favorites.map((f) => f.key)), [favorites])
 
+  const platform = envCheck?.platform ?? (navigator.userAgent.includes('Windows') ? 'win32' : 'linux')
+  const isWindows = platform === 'win32'
+  const terminalLabel = isWindows ? 'PowerShell' : '终端'
+
   const selectProject = useCallback(
     (p: ProjectInfo) => {
       setSelectedId(p.id)
@@ -151,39 +155,39 @@ export default function App() {
     async (dir: string) => {
       try {
         const r = await window.api.launchProject(dir)
-        if (r.ok) showToast('已在新 PowerShell 窗口中启动 opencode')
+        if (r.ok) showToast(`已在新${terminalLabel}窗口中启动 opencode`)
         else showToast(`启动失败：${r.error}`)
       } catch (err) {
         showToast(`启动失败：${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [showToast]
+    [showToast, terminalLabel]
   )
 
   const launchShell = useCallback(
     async (dir: string) => {
       try {
         const r = await window.api.launchShell(dir)
-        if (r.ok) showToast('已打开 PowerShell')
+        if (r.ok) showToast(`已打开${terminalLabel}`)
         else showToast(`启动失败：${r.error}`)
       } catch (err) {
         showToast(`启动失败：${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [showToast]
+    [showToast, terminalLabel]
   )
 
   const launchSession = useCallback(
     async (dir: string, sessionId: string) => {
       try {
         const r = await window.api.launchSession(dir, sessionId)
-        if (r.ok) showToast('已在新 PowerShell 窗口中续接会话')
+        if (r.ok) showToast(`已在新${terminalLabel}窗口中续接会话`)
         else showToast(`启动失败：${r.error}`)
       } catch (err) {
         showToast(`启动失败：${err instanceof Error ? err.message : String(err)}`)
       }
     },
-    [showToast]
+    [showToast, terminalLabel]
   )
 
   const addFolder = useCallback(async () => {
@@ -293,6 +297,7 @@ export default function App() {
               sessions={sessions}
               recentSessions={recentSessions}
               favoriteKeys={favoriteKeys}
+              platform={platform}
               onLaunchProject={(d) => void launchProject(d)}
               onLaunchShell={(d) => void launchShell(d)}
               onLaunchSession={(d, id) => void launchSession(d, id)}
@@ -311,6 +316,7 @@ export default function App() {
             projects={projects}
             favoriteKeys={favoriteKeys}
             recentSessions={recentSessions}
+            platform={platform}
             onLaunchProject={(d) => void launchProject(d)}
             onLaunchShell={(d) => void launchShell(d)}
             onLaunchSession={(d, id) => void launchSession(d, id)}
@@ -326,6 +332,7 @@ export default function App() {
           settings={settings}
           opencodeCheck={opencodeCheck}
           hiddenProjects={hiddenProjects}
+          platform={platform}
           onChange={(p) => void changeSettings(p)}
           onPickDataDir={() => void pickDataDir()}
           onCheckOpencode={() => void checkOpencode()}
