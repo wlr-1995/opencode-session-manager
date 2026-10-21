@@ -6,3 +6,4 @@ resources/node.exe
 *.tsbuildinfo
 *.log
 .DS_Store
+.e2e/

@@ -131,6 +131,40 @@ describe('db-helper 协议（OpenCode 1.x：只有 session 表）', () => {
     expect(recent[2].projectWorktree).toBe('D:/proj/other')
   })
 
+  it('searchSessions 按标题与目录匹配，排除归档与子会话', async () => {
+    const byTitle = await client.request('searchSessions', { keyword: '登录' })
+    expect(byTitle.ok).toBe(true)
+    expect((byTitle.data as { id: string }[]).map((s) => s.id)).toEqual(['s1'])
+
+    const byDir = await client.request('searchSessions', { keyword: 'ALPHA' })
+    expect((byDir.data as { id: string }[]).map((s) => s.id)).toEqual(['s1', 's2'])
+
+    const archived = await client.request('searchSessions', { keyword: '归档' })
+    expect(archived.data).toEqual([])
+
+    const child = await client.request('searchSessions', { keyword: 'explore' })
+    expect(child.data).toEqual([])
+  })
+
+  it('searchSessions 按最近更新倒序并附带 projectWorktree', async () => {
+    const res = await client.request('searchSessions', { keyword: 'proj' })
+    expect(res.ok).toBe(true)
+    const rows = res.data as { id: string; projectWorktree: string | null }[]
+    expect(rows.map((s) => s.id)).toEqual(['s1', 's2', 's4'])
+    expect(rows[2].projectWorktree).toBe('D:/proj/other')
+  })
+
+  it('searchSessions 对空关键词返回空数组，并转义 LIKE 通配符', async () => {
+    const empty = await client.request('searchSessions', { keyword: '   ' })
+    expect(empty.data).toEqual([])
+
+    const percent = await client.request('searchSessions', { keyword: '%' })
+    expect(percent.data).toEqual([])
+
+    const underscore = await client.request('searchSessions', { keyword: '_' })
+    expect(underscore.data).toEqual([])
+  })
+
   it('未知操作返回错误', async () => {
     const res = await client.request('nope')
     expect(res.ok).toBe(false)
@@ -196,5 +230,13 @@ describe('db-helper 协议（OpenCode 2.x：session 表已冻结，以 session_v
     expect(recent.map((s) => s.id)).toEqual(['s6', 's1', 's2', 's4'])
     expect(recent[0].projectWorktree).toBe('D:/proj/alpha')
     expect(recent[3].projectWorktree).toBe('D:/proj/other')
+  })
+
+  it('searchSessions 覆盖 session_v2 中的新会话', async () => {
+    const res = await client.request('searchSessions', { keyword: 'v2' })
+    expect(res.ok).toBe(true)
+    const rows = res.data as { id: string; projectWorktree: string | null }[]
+    expect(rows.map((s) => s.id)).toEqual(['s6'])
+    expect(rows[0].projectWorktree).toBe('D:/proj/alpha')
   })
 })

@@ -1,13 +1,32 @@
+import { useEffect, useRef, useState } from 'react'
 import type { SessionInfo } from '@shared/types'
 import { fullTime, modelShort, relativeTime } from '../format'
+
+export interface SessionFocus {
+  id: string
+}
 
 interface Props {
   sessions: SessionInfo[]
   onResume: (s: SessionInfo) => void
   showDirectory?: boolean
+  focus?: SessionFocus | null
 }
 
-export default function SessionList({ sessions, onResume, showDirectory }: Props) {
+export default function SessionList({ sessions, onResume, showDirectory, focus }: Props) {
+  const rowRefs = useRef(new Map<string, HTMLDivElement>())
+  const [highlightId, setHighlightId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!focus) return
+    const el = rowRefs.current.get(focus.id)
+    if (!el) return
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    setHighlightId(focus.id)
+    const timer = window.setTimeout(() => setHighlightId(null), 2400)
+    return () => window.clearTimeout(timer)
+  }, [focus, sessions])
+
   if (sessions.length === 0) {
     return (
       <div className="empty-block">
@@ -23,7 +42,14 @@ export default function SessionList({ sessions, onResume, showDirectory }: Props
         const agent = s.agent
         const model = modelShort(s.model)
         return (
-          <div key={s.id} className="session-row">
+          <div
+            key={s.id}
+            ref={(el) => {
+              if (el) rowRefs.current.set(s.id, el)
+              else rowRefs.current.delete(s.id)
+            }}
+            className={`session-row ${highlightId === s.id ? 'highlight' : ''}`}
+          >
             <div className="session-info">
               <div className="session-title" title={fullTime(s.timeCreated)}>
                 {s.title || '新建会话'}

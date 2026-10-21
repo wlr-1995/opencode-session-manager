@@ -71,6 +71,12 @@ export function registerIpc(bridge: DbBridge, store: Store): void {
     return request<RecentSession[]>('recentSessions', { limit: 50 })
   })
 
+  ipcMain.handle('sessions:search', async (_e, keyword: string): Promise<RecentSession[]> => {
+    const kw = keyword.trim()
+    if (!kw) return []
+    return request<RecentSession[]>('searchSessions', { keyword: kw, limit: 100 })
+  })
+
   ipcMain.handle('favorites:toggle', async (_e, dir: string, label: string): Promise<Favorite[]> => {
     return store.toggleFavorite(dir, label)
   })

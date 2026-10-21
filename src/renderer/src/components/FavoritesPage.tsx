@@ -29,11 +29,9 @@ export default function FavoritesPage({
   onToggleFavoriteDir,
   onToggleFavorite
 }: Props) {
-  const [q, setQ] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [sessions, setSessions] = useState<SessionInfo[]>([])
 
-  const kw = q.trim().toLowerCase()
   const list = useMemo<ProjectInfo[]>(() => {
     const seen = new Set<string>()
     const favs: ProjectInfo[] = []
@@ -58,11 +56,8 @@ export default function FavoritesPage({
         })
       }
     }
-    if (!kw) return favs
-    return favs.filter(
-      (p) => p.name.toLowerCase().includes(kw) || p.worktree.toLowerCase().includes(kw)
-    )
-  }, [favorites, projects, favoriteKeys, kw])
+    return favs
+  }, [favorites, projects, favoriteKeys])
 
   const selected = useMemo(() => list.find((p) => p.id === selectedId) ?? null, [list, selectedId])
 
@@ -82,14 +77,6 @@ export default function FavoritesPage({
   return (
     <div className="body">
       <aside className="sidebar">
-        <div className="search-wrap">
-          <input
-            className="search"
-            placeholder="搜索收藏…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
         <div className="list">
           {list.map((p) => (
             <div
@@ -119,11 +106,7 @@ export default function FavoritesPage({
               </div>
             </div>
           ))}
-          {list.length === 0 && (
-            <div className="empty">
-              {favorites.length === 0 ? '暂无收藏，在项目上点 ★' : '没有匹配的收藏'}
-            </div>
-          )}
+          {list.length === 0 && <div className="empty">暂无收藏，在项目上点 ★</div>}
         </div>
       </aside>
 

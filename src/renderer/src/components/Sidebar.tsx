@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { ProjectInfo } from '@shared/types'
 
 function TrashIcon() {
@@ -42,30 +41,10 @@ export default function Sidebar({
   onHideProject,
   onRemoveManual
 }: Props) {
-  const [search, setSearch] = useState('')
-
-  const q = search.trim().toLowerCase()
-  const filtered = q
-    ? projects.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.worktree.toLowerCase().includes(q)
-      )
-    : projects
-
   return (
     <aside className="sidebar">
-      <div className="search-wrap">
-        <input
-          className="search"
-          placeholder="搜索项目…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-      </div>
-
       <div className="list">
-        {filtered.map((p) => (
+        {projects.map((p) => (
           <div
             key={p.id}
             className={`item ${selectedId === p.id ? 'active' : ''}`}
@@ -119,7 +98,7 @@ export default function Sidebar({
           </div>
         ))}
 
-        {filtered.length === 0 && <div className="empty">没有匹配的项目</div>}
+        {projects.length === 0 && <div className="empty">暂无项目</div>}
       </div>
     </aside>
   )

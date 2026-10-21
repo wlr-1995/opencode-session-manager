@@ -1,5 +1,5 @@
 import type { ProjectInfo, RecentSession, SessionInfo } from '@shared/types'
-import SessionList from './SessionList'
+import SessionList, { type SessionFocus } from './SessionList'
 
 interface Props {
   project: ProjectInfo | null
@@ -7,6 +7,7 @@ interface Props {
   recentSessions: RecentSession[]
   favoriteKeys: Set<string>
   platform: string
+  focusSession?: SessionFocus | null
   onLaunchProject: (dir: string) => void
   onLaunchShell: (dir: string) => void
   onLaunchSession: (dir: string, sessionId: string) => void
@@ -20,6 +21,7 @@ export default function MainPane({
   recentSessions,
   favoriteKeys,
   platform,
+  focusSession,
   onLaunchProject,
   onLaunchShell,
   onLaunchSession,
@@ -98,7 +100,11 @@ export default function MainPane({
           <span className="muted light">按最近更新排序，可直接续接</span>
         )}
       </div>
-      <SessionList sessions={sessions} onResume={(s) => onLaunchSession(s.directory ?? project.worktree, s.id)} />
+      <SessionList
+        sessions={sessions}
+        onResume={(s) => onLaunchSession(s.directory ?? project.worktree, s.id)}
+        focus={focusSession}
+      />
     </main>
   )
 }

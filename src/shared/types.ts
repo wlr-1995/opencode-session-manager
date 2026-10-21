@@ -88,6 +88,7 @@ export interface ManagerApi {
   listProjects(): Promise<ProjectInfo[]>
   sessionsByProject(projectId: string): Promise<SessionInfo[]>
   recentSessions(): Promise<RecentSession[]>
+  searchSessions(keyword: string): Promise<RecentSession[]>
   toggleFavorite(dir: string, label: string): Promise<Favorite[]>
   listFavorites(): Promise<Favorite[]>
   listRecents(): Promise<RecentItem[]>

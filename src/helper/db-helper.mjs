@@ -188,6 +188,33 @@ export function listRecentSessions(dbPath, limit = 50) {
   return rows.map((r) => ({ ...mapSession(r), projectWorktree: r.project_worktree ?? null }))
 }
 
+// 全局会话搜索：只匹配标题与目录，排除归档会话与子会话，按最近更新倒序。
+export function searchSessions(dbPath, keyword, limit = 100) {
+  const kw = String(keyword ?? '').trim()
+  if (!kw) return []
+  const db = openDb(dbPath)
+  const pattern = `%${escapeLike(kw.toLowerCase())}%`
+  const rows = db
+    .prepare(
+      `SELECT s.id, s.project_id, s.directory, s.title, s.agent, s.model,
+              s.time_created, s.time_updated,
+              COALESCE(NULLIF(p.worktree, '/'), s.directory) AS project_worktree
+         FROM ${_sessionTable} s
+         LEFT JOIN project p ON p.id = s.project_id
+        WHERE s.time_archived IS NULL AND s.parent_id IS NULL
+          AND (lower(COALESCE(s.title, '')) LIKE ? ESCAPE '\\'
+               OR lower(COALESCE(s.directory, '')) LIKE ? ESCAPE '\\')
+        ORDER BY s.time_updated DESC
+        LIMIT ?`
+    )
+    .all(pattern, pattern, limit)
+  return rows.map((r) => ({ ...mapSession(r), projectWorktree: r.project_worktree ?? null }))
+}
+
+function escapeLike(text) {
+  return text.replace(/[\\%_]/g, (ch) => `\\${ch}`)
+}
+
 function mapSession(r) {
   return {
     id: r.id,
@@ -225,6 +252,8 @@ function handle(req) {
       return listSessionsByProject(dbPath, req.projectId)
     case 'recentSessions':
       return listRecentSessions(dbPath, req.limit ?? 50)
+    case 'searchSessions':
+      return searchSessions(dbPath, req.keyword, req.limit ?? 100)
     default:
       throw new Error(`未知操作：${op}`)
   }

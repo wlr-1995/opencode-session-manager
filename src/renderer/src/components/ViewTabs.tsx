@@ -1,8 +1,13 @@
+import type { KeyboardEvent } from 'react'
+
 export type ViewKind = 'projects' | 'recent' | 'favorites'
 
 interface Props {
   view: ViewKind
   setView: (v: ViewKind) => void
+  query: string
+  onQueryChange: (q: string) => void
+  onSearchKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void
   refreshing: boolean
   onRefresh: () => void
   onAddFolder: () => void
@@ -12,6 +17,9 @@ interface Props {
 export default function ViewTabs({
   view,
   setView,
+  query,
+  onQueryChange,
+  onSearchKeyDown,
   refreshing,
   onRefresh,
   onAddFolder,
@@ -38,6 +46,29 @@ export default function ViewTabs({
         >
           收藏
         </button>
+      </div>
+      <div className="view-tabs-search">
+        <div className="search-box">
+          <input
+            className="search"
+            aria-label="搜索项目或会话"
+            placeholder="搜索项目或会话…"
+            value={query}
+            spellCheck={false}
+            onChange={(e) => onQueryChange(e.target.value)}
+            onKeyDown={onSearchKeyDown}
+          />
+          {query && (
+            <button
+              className="search-clear"
+              title="清空搜索（Esc）"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onQueryChange('')}
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       <div className="view-tabs-right">
         <button className="btn" onClick={onAddFolder} title="添加任意文件夹为项目">

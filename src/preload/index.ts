@@ -20,6 +20,8 @@ const api: ManagerApi = {
   sessionsByProject: (projectId: string) =>
     ipcRenderer.invoke('sessions:byProject', projectId) as Promise<SessionInfo[]>,
   recentSessions: () => ipcRenderer.invoke('sessions:recent') as Promise<RecentSession[]>,
+  searchSessions: (keyword: string) =>
+    ipcRenderer.invoke('sessions:search', keyword) as Promise<RecentSession[]>,
   toggleFavorite: (dir: string, label: string) =>
     ipcRenderer.invoke('favorites:toggle', dir, label) as Promise<Favorite[]>,
   listFavorites: () => ipcRenderer.invoke('favorites:list') as Promise<Favorite[]>,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react'
 import type {
   AppSettings,
   DbStatus,
@@ -17,6 +17,10 @@ import ConfirmModal from './components/ConfirmModal'
 import ViewTabs, { type ViewKind } from './components/ViewTabs'
 import RecentPage from './components/RecentPage'
 import FavoritesPage from './components/FavoritesPage'
+import SearchResults, { type SearchItem } from './components/SearchResults'
+import { normalizeDir } from '@shared/dir'
+import { matchProjects, resolveSessionProject } from '@shared/search'
+import type { SessionFocus } from './components/SessionList'
 
 export default function App() {
   const [health, setHealth] = useState<DbStatus | null>(null)
@@ -34,6 +38,14 @@ export default function App() {
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  const [query, setQuery] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const [sessionHits, setSessionHits] = useState<RecentSession[]>([])
+  const [searching, setSearching] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [focusSession, setFocusSession] = useState<SessionFocus | null>(null)
+  const [searchReload, setSearchReload] = useState(0)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -97,6 +109,7 @@ export default function App() {
         await reloadProjects()
         await reloadExtras()
         await reloadSessions(selectedId)
+        setSearchReload((n) => n + 1)
       }
     } catch (err) {
       showToast(`刷新失败：${err instanceof Error ? err.message : String(err)}`)
@@ -119,6 +132,61 @@ export default function App() {
     void reloadSessions(selectedId)
   }, [selectedId, reloadSessions])
 
+  const searchTerm = query.trim()
+  const isSearching = searchTerm.length > 0
+
+  useEffect(() => {
+    setActiveIndex(0)
+    const kw = query.trim()
+    if (!kw) {
+      setKeyword('')
+      return
+    }
+    const timer = window.setTimeout(() => setKeyword(kw), 150)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    if (!keyword) {
+      setSessionHits([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    window.api
+      .searchSessions(keyword)
+      .then((rows) => {
+        if (cancelled) return
+        setSessionHits(rows)
+        setActiveIndex(0)
+        setSearching(false)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setSessionHits([])
+        setSearching(false)
+        showToast(`搜索失败：${err instanceof Error ? err.message : String(err)}`)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [keyword, searchReload, showToast])
+
+  const projectHits = useMemo(() => matchProjects(projects, keyword), [projects, keyword])
+
+  const searchItems = useMemo<SearchItem[]>(
+    () => [
+      ...projectHits.map<SearchItem>((project) => ({ kind: 'project', project })),
+      ...sessionHits.map<SearchItem>((session) => ({ kind: 'session', session }))
+    ],
+    [projectHits, sessionHits]
+  )
+
+  useEffect(() => {
+    setActiveIndex((i) => (searchItems.length === 0 ? 0 : Math.min(i, searchItems.length - 1)))
+  }, [searchItems.length])
+
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === selectedId) ?? null,
     [projects, selectedId]
@@ -134,6 +202,7 @@ export default function App() {
     (p: ProjectInfo) => {
       setSelectedId(p.id)
       setView('projects')
+      setFocusSession(null)
     },
     []
   )
@@ -190,6 +259,57 @@ export default function App() {
     [showToast, terminalLabel]
   )
 
+  const activateSearchItem = useCallback(
+    (item: SearchItem) => {
+      if (item.kind === 'project') {
+        setSelectedId(item.project.id)
+        setView('projects')
+        setFocusSession(null)
+        setQuery('')
+        return
+      }
+      const project = resolveSessionProject(projects, item.session)
+      if (!project) {
+        showToast('未找到该会话所属的项目，可能已被隐藏')
+        return
+      }
+      setSelectedId(project.id)
+      setView('projects')
+      setFocusSession({ id: item.session.id })
+      setQuery('')
+    },
+    [projects, showToast]
+  )
+
+  const onSearchKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (e.nativeEvent.isComposing) return
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setQuery('')
+        return
+      }
+      if (!isSearching || searchItems.length === 0) return
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.min(i + 1, searchItems.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        const item = searchItems[activeIndex] ?? searchItems[0]
+        if (item) activateSearchItem(item)
+      }
+    },
+    [isSearching, searchItems, activeIndex, activateSearchItem]
+  )
+
+  const changeView = useCallback((v: ViewKind) => {
+    setView(v)
+    setQuery('')
+  }, [])
+
   const addFolder = useCallback(async () => {
     setProjects(await window.api.addFolder())
   }, [])
@@ -197,7 +317,7 @@ export default function App() {
   const removeManual = useCallback(
     async (dir: string) => {
       setProjects(await window.api.removeManual(dir))
-      if (selectedId === `manual:${dir.replace(/\\/g, '/').replace(/\/+$/, '')}`) {
+      if (selectedId === `manual:${normalizeDir(dir)}`) {
         setSelectedId(null)
         setSessions([])
       }
@@ -274,14 +394,27 @@ export default function App() {
     <div className="app">
       <ViewTabs
         view={view}
-        setView={setView}
+        setView={changeView}
+        query={query}
+        onQueryChange={setQuery}
+        onSearchKeyDown={onSearchKeyDown}
         refreshing={refreshing}
         onRefresh={() => void refreshAll()}
         onAddFolder={() => void addFolder()}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="body">
-        {view === 'projects' ? (
+        {isSearching ? (
+          <SearchResults
+            keyword={searchTerm}
+            items={searchItems}
+            activeIndex={activeIndex}
+            searching={searching || searchTerm !== keyword}
+            onActivate={activateSearchItem}
+            onHover={setActiveIndex}
+            onResume={(s) => void launchSession(s.directory ?? s.projectWorktree ?? '', s.id)}
+          />
+        ) : view === 'projects' ? (
           <>
             <Sidebar
               projects={projects}
@@ -298,6 +431,7 @@ export default function App() {
               recentSessions={recentSessions}
               favoriteKeys={favoriteKeys}
               platform={platform}
+              focusSession={focusSession}
               onLaunchProject={(d) => void launchProject(d)}
               onLaunchShell={(d) => void launchShell(d)}
               onLaunchSession={(d, id) => void launchSession(d, id)}

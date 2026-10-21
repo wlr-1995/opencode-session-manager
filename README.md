@@ -7,7 +7,8 @@
 ## 功能
 
 - **项目列表**：自动读取 `~/.local/share/opencode/opencode.db` 中的项目（按最近使用排序），也可手动添加任意文件夹
-- **会话管理**：按项目列出历史会话（标题 / 相对时间 / agent / model），一键续接
+- **统一搜索**：顶部一个搜索框同时搜索项目与会话，会话按标题与目录查询全库；↑ ↓ 选择、Enter 打开、Esc 清空
+- **会话管理**：按项目列出历史会话（标题 / 相对时间 / agent / model），一键续接；搜索到会话可直接定位到所属项目并高亮
 - **一键启动**：`打开项目`、`续接会话`、`仅打开终端`、`文件管理器`，均在**新终端窗口**中运行
 - **最近 / 收藏**：跨项目最近会话、项目收藏星标，本地持久化
 - **引导页**：找不到数据库时提示，支持手动指定数据目录
@@ -44,6 +45,7 @@ npm run package:linux    # 生成 AppImage（release/OpenCodeSessionManager-*.Ap
 ## 工作原理
 
 - 主进程通过 stdio JSON 协议驱动 `src/helper/db-helper.mjs`（纯 Node 边车），以**只读**方式查询 SQLite 中的 `project` / `session` 表；opencode 正在运行时也能安全读取（WAL 模式）。
+- 顶部搜索框的项目匹配在前端完成；会话搜索由边车按标题与目录查询 `session` / `session_v2`（排除归档会话与子会话，最多 100 条）。
 - Windows 启动方式：`pwsh -NoExit -EncodedCommand <base64>`，命令内先 `Set-Location` 到目标目录再执行 `opencode`（或 `opencode -s <sessionId>`），彻底规避空格 / 中文 / 引号问题。
 - Linux 启动方式：检测终端模拟器后，用 `$SHELL -l -c "cd -- '<目录>' && opencode [-s <sessionId>]"` 启动；opencode 退出后保留一个交互式 shell。
 - 手动项目、收藏、最近记录存放在 Electron 用户数据目录的 `manager-store.json`。
