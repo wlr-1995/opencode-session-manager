@@ -54,6 +54,11 @@ if (schema === 'v2') {
   db.prepare(
     `INSERT INTO project (id, worktree, vcs, name, time_updated) VALUES (?, ?, ?, ?, ?)`
   ).run('p3', 'D:/proj/other', null, null, 500)
+  // opencode 可能为同一目录留下多条 project 记录：先建的非 git 记录，
+  // 识别出 git 后又建一条。p4 就是 beta 目录遗留的空记录。
+  db.prepare(
+    `INSERT INTO project (id, worktree, vcs, name, time_updated) VALUES (?, ?, ?, ?, ?)`
+  ).run('p4', 'D:/proj/beta', null, null, 400)
 }
 
 const COLUMNS = `id, project_id, parent_id, slug, directory, title, version, agent, model,
@@ -71,7 +76,8 @@ const legacySessions = [
 
 // 2.0 起的会话只写 session_v2，session 表里没有。
 const v2Sessions = [
-  ['s6', 'p1', null, 'D:/proj/alpha', 'V2 新会话', 'build', '{"id":"m2","providerID":"p","variant":"high"}', 1100, 1200, null]
+  ['s6', 'p1', null, 'D:/proj/alpha', 'V2 新会话', 'build', '{"id":"m2","providerID":"p","variant":"high"}', 1100, 1200, null],
+  ['s7', 'p2', null, 'D:/proj/beta', 'Beta 会话', 'build', null, 250, 550, null]
 ]
 
 function insertAll(table, sessions, version) {

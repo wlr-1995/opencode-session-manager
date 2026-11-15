@@ -92,6 +92,23 @@ export function listProjects(dbPath) {
     lastSessionAt: r.last_session_at ?? null,
     sessionCount: r.session_count ?? 0
   }))
+  // opencode 可能为同一目录留下多条 project 记录（例如先建了非 git 记录，
+  // 之后识别出 git 又新建一条），按目录合并：保留活跃度最高的一条作为代表，
+  // 其余记录的会话数与最近时间并入，避免侧栏出现同名同路径的重复项。
+  const merged = new Map()
+  for (const project of projects) {
+    const dir = normalizeDir(project.worktree)
+    const acc = merged.get(dir)
+    if (!acc) {
+      merged.set(dir, project)
+      continue
+    }
+    acc.sessionCount += project.sessionCount
+    acc.lastSessionAt = Math.max(acc.lastSessionAt ?? 0, project.lastSessionAt ?? 0) || null
+    acc.timeUpdated = Math.max(acc.timeUpdated, project.timeUpdated)
+    if (!acc.name && project.name) acc.name = project.name
+    if (!acc.vcs && project.vcs) acc.vcs = project.vcs
+  }
   // 1.x 期间非 git 目录的会话挂在 global 项目下，只靠 session.directory 指回目录；
   // 2.0 会给同一目录补一条真正的 project 记录。两者必须按目录合并，否则这条
   // project 记录会把 global 会话遮蔽成 0 条。只有完全没有 project 记录的目录，
@@ -116,15 +133,14 @@ export function listProjects(dbPath) {
     acc.lastSessionAt = Math.max(acc.lastSessionAt ?? 0, r.last_session_at ?? 0) || null
     byDirectory.set(dir, acc)
   }
-  const byWorktree = new Map(projects.map((p) => [normalizeDir(p.worktree), p]))
   for (const [dir, acc] of byDirectory) {
-    const project = byWorktree.get(dir)
+    const project = merged.get(dir)
     if (project) {
       project.sessionCount += acc.sessionCount
       project.lastSessionAt = Math.max(project.lastSessionAt ?? 0, acc.lastSessionAt ?? 0) || null
       continue
     }
-    projects.push({
+    merged.set(dir, {
       id: `dir:${dir}`,
       name: basenameSafe(dir),
       worktree: dir,
@@ -134,8 +150,9 @@ export function listProjects(dbPath) {
       sessionCount: acc.sessionCount
     })
   }
-  projects.sort((a, b) => (b.lastSessionAt ?? b.timeUpdated) - (a.lastSessionAt ?? a.timeUpdated))
-  return projects
+  const result = [...merged.values()]
+  result.sort((a, b) => (b.lastSessionAt ?? b.timeUpdated) - (a.lastSessionAt ?? a.timeUpdated))
+  return result
 }
 
 export function listSessionsByProject(dbPath, projectId) {
@@ -156,19 +173,30 @@ export function listSessionsByProject(dbPath, projectId) {
   }
   // 真实项目记录：既包含 project_id 命中的会话，也包含挂在 global 项目下、但
   // directory 指向该项目 worktree 的历史会话（2.0 的按目录项目记录接管的正是这些）。
+  // 同一目录可能存在多条 project 记录（见 listProjects），这里按目录取全部 id，
+  // 用任意一条记录的 id 查询都能拿到该目录的完整会话。
   const project = db.prepare(`SELECT worktree FROM project WHERE id = ?`).get(projectId)
   const worktree = normalizeDir(project?.worktree)
+  const ids = worktree
+    ? db
+        .prepare(`SELECT id, worktree FROM project`)
+        .all()
+        .filter((r) => normalizeDir(r.worktree) === worktree)
+        .map((r) => r.id)
+    : []
+  if (ids.length === 0) ids.push(projectId)
+  const placeholders = ids.map(() => '?').join(', ')
   return db
     .prepare(
       `SELECT id, project_id, directory, title, agent, model, time_created, time_updated
          FROM ${table}
         WHERE time_archived IS NULL AND parent_id IS NULL
-          AND (project_id = ?
+          AND (project_id IN (${placeholders})
                OR (project_id = 'global' AND rtrim(replace(directory, '\\', '/'), '/') = ?))
         ORDER BY time_updated DESC
         LIMIT 300`
     )
-    .all(projectId, worktree)
+    .all(...ids, worktree)
     .map(mapSession)
 }
 

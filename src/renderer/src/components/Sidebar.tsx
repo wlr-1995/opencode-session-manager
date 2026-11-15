@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import type { ProjectInfo } from '@shared/types'
+import { projectDisplayPaths } from '@shared/dir'
 
 function TrashIcon() {
   return (
@@ -41,10 +43,12 @@ export default function Sidebar({
   onHideProject,
   onRemoveManual
 }: Props) {
+  const displayPaths = useMemo(() => projectDisplayPaths(projects), [projects])
+
   return (
     <aside className="sidebar">
       <div className="list">
-        {projects.map((p) => (
+        {projects.map((p, index) => (
           <div
             key={p.id}
             className={`item ${selectedId === p.id ? 'active' : ''}`}
@@ -55,7 +59,9 @@ export default function Sidebar({
                 {p.name}
                 {p.isManual && <span className="badge">手动</span>}
               </div>
-              <div className="item-sub">{p.worktree}</div>
+              <div className="item-sub" title={p.worktree}>
+                {displayPaths[index]}
+              </div>
             </div>
             <div className="item-side">
               {!p.isManual && (

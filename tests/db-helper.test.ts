@@ -223,13 +223,42 @@ describe('db-helper 协议（OpenCode 2.x：session 表已冻结，以 session_v
     expect(sessions.map((s) => s.id)).toEqual(['s4'])
   })
 
+  it('同一目录的多条 project 记录合并为一条', async () => {
+    const res = await client.request('projects')
+    expect(res.ok).toBe(true)
+    const projects = res.data as {
+      id: string
+      worktree: string
+      vcs: string | null
+      sessionCount: number
+      lastSessionAt: number | null
+    }[]
+    const beta = projects.filter((p) => p.worktree === 'D:/proj/beta')
+    expect(beta).toHaveLength(1)
+    // 代表记录取活跃度最高的那条（p2 有会话），遗留的空记录 p4 不再单独显示
+    expect(beta[0].id).toBe('p2')
+    expect(beta[0].sessionCount).toBe(1)
+    expect(beta[0].lastSessionAt).toBe(550)
+    expect(projects.map((p) => p.id)).toEqual(['p1', 'p3', 'p2'])
+  })
+
+  it('按遗留的重复 project id 查询也会返回该目录的全部会话', async () => {
+    const byDuplicate = await client.request('sessions', { projectId: 'p4' })
+    expect(byDuplicate.ok).toBe(true)
+    expect((byDuplicate.data as { id: string }[]).map((s) => s.id)).toEqual(['s7'])
+
+    const byCanonical = await client.request('sessions', { projectId: 'p2' })
+    expect((byCanonical.data as { id: string }[]).map((s) => s.id)).toEqual(['s7'])
+  })
+
   it('recentSessions 跨项目包含 2.0 新会话', async () => {
     const res = await client.request('recentSessions', { limit: 10 })
     expect(res.ok).toBe(true)
     const recent = res.data as { id: string; projectWorktree: string | null }[]
-    expect(recent.map((s) => s.id)).toEqual(['s6', 's1', 's2', 's4'])
+    expect(recent.map((s) => s.id)).toEqual(['s6', 's1', 's2', 's4', 's7'])
     expect(recent[0].projectWorktree).toBe('D:/proj/alpha')
     expect(recent[3].projectWorktree).toBe('D:/proj/other')
+    expect(recent[4].projectWorktree).toBe('D:/proj/beta')
   })
 
   it('searchSessions 覆盖 session_v2 中的新会话', async () => {
